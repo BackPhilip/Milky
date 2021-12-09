@@ -10,8 +10,11 @@ from discord.ext import commands
 from discord.utils import get
 from youtube_dl import YoutubeDL
 
+intents = discord.Intents.default()
+intents.members = True
+
 load_dotenv()
-bot = commands.Bot(command_prefix="~", description="Ara Ara :3")
+bot = commands.Bot(command_prefix="~", intents=intents)
 TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD = os.getenv('DISCORD_GUILD')
 playlist = []
@@ -49,6 +52,40 @@ def update():
 @bot.event
 async def on_ready():
     print('Milky Online')
+
+@bot.event
+async def on_member_join(member):
+    channel = bot.get_channel(893943538201526284)
+    response = requests.get("https://g.tenor.com/v1/search?q={}&key={}&limit=20".format('anime welcome', TenorToken))
+    data = response.json()
+    output = random.choice(data["results"])
+    gif = output['media'][0]['gif']['url']
+    embed=discord.Embed(title="Welcome Degenerate",description=f"{member.mention} Just Joined")
+    embed.set_image(url=gif)
+    role = discord.utils.get(member.guild.roles, name='Common Folk')
+    await member.add_roles(role)
+    print (str(member) + " joined the server")
+    await channel.send(embed=embed)
+
+@bot.event
+async def on_member_remove(member):
+    channel = bot.get_channel(893943538201526284)
+    response = requests.get("https://g.tenor.com/v1/search?q={}&key={}&limit=20".format('anime cry', TenorToken))
+    data = response.json()
+    output = random.choice(data["results"])
+    gif = output['media'][0]['gif']['url']
+    embed=discord.Embed(title="Member Left",description=f"{member.mention} Just Left the server")
+    embed.set_image(url=gif)
+    print (str(member) + " left the server")
+    await channel.send(embed=embed)
+
+@bot.command()
+async def stats(ctx):
+    embed=discord.Embed(title="Here are the stats:")
+    embed.add_field(name="Users:", value=ctx.guild.member_count, inline=False)
+    embed.add_field(name="Channels:", value=len(ctx.guild.channels), inline=False)
+    print(str(ctx.author) + " asked for stats")
+    await ctx.send(embed=embed)
 
 @bot.command()
 async def hey(message):
@@ -115,6 +152,22 @@ async def leave(ctx):
         print("Milky was disconnected from " + str(ctx.message.author.voice.channel))
 
 @bot.command()
+async def say(ctx):
+    channel = ctx.message.author.voice.channel
+    voice = get(bot.voice_clients, guild=ctx.guild)
+    if voice and voice.is_connected():
+        await voice.move_to(channel)
+        say = ctx.message.content.removeprefix('~say')
+        await ctx.send(str(say), tts=True)
+        voice.stop()
+    else:
+        voice = await channel.connect()
+        say = ctx.message.content.removeprefix('~say')
+        await ctx.send(str(say), tts=True)
+        voice.stop()
+        print("Milky joined " + str(ctx.channel))
+
+@bot.command()
 async def play(ctx, url):
     voice = get(bot.voice_clients, guild=ctx.guild)
     global playlist
@@ -122,7 +175,6 @@ async def play(ctx, url):
     global queueNames
     YDL_OPTIONS = {'format': 'bestaudio', 'noplaylist': 'True'}
     channel = ctx
-
     if voice == None: 
         await ctx.reply("I'm not in vc :(")
         return
@@ -148,6 +200,41 @@ async def play(ctx, url):
             queueNames.append(title)
             playlist.append(URL)
             await ctx.reply(embed=embedVar)
+
+@bot.command()
+async def vibe(ctx):
+    global playlist
+    global queueNames
+    global queueCount
+    global channel
+    YDL_OPTIONS = {'format': 'bestaudio', 'noplaylist': 'True'}
+    voice = get(bot.voice_clients, guild=ctx.guild)
+    file = ctx.message.content.removeprefix('~vibe ') + ".txt"
+    custom = open(file, "r")
+
+    channel = ctx
+    
+    for line in custom:
+        if (line != ""):
+            if not voice.is_playing():
+                with YoutubeDL(YDL_OPTIONS) as ydl:
+                    info = ydl.extract_info(str(line), download=False)
+                    title = ydl.extract_info(str(line), download=False).get("title", None)
+                    embedVar = discord.Embed(title="Song started :play_pause:", description=title, color=0xf900ff)
+                URL = info['url']
+                queueNames.append(title)
+                playlist.append(URL)
+                voice.play(discord.FFmpegPCMAudio(executable="C:/ffmpeg.exe", source=playlist[queueCount]))
+                voice.is_playing()
+                update()
+                await ctx.reply(embed=embedVar)
+            else:
+                with YoutubeDL(YDL_OPTIONS) as ydl:
+                    info = ydl.extract_info(line, download=False)
+                    title = ydl.extract_info(line, download=False).get("title", None)
+                URL = info['url']
+                queueNames.append(title)
+                playlist.append(URL)
 
 @bot.command()
 async def remove(ctx, number):
@@ -258,11 +345,14 @@ async def stop(ctx):
 
 @bot.command()
 async def clear(ctx, amount=100000):
-    await ctx.channel.purge(limit=amount)
-    await ctx.send("Fine keep your secrets, messages have been deleted 🤨")
-
-    if amount == 100000: print ("All messages cleared from " + str(ctx.channel))
-    else: print (str(amount) + " messages cleared from " + str(ctx.channel))
+    if ctx.message.author.guild_permissions.administrator:
+        await ctx.channel.purge(limit=amount)
+        await ctx.send("Fine keep your secrets, messages have been deleted 🤨")
+        if amount == 100000: print ("All messages cleared from " + str(ctx.channel))
+        else: print (str(amount) + " messages cleared from " + str(ctx.channel))
+    else:
+        embed=discord.Embed(title="Permission Denied.", description="You don't have permission to use this command.", color=0xff00f6)
+        await ctx.reply(embed=embed)
 
 @bot.command(pass_context=True)
 async def meme(ctx):
@@ -353,6 +443,17 @@ async def fuck(ctx, member : discord.Member):
     print(str(ctx.author) + " fucked " + str(member))
 
 @bot.command(pass_context=True)
+async def tie(ctx, member : discord.Member):
+    response = requests.get("https://g.tenor.com/v1/search?q={}&key={}&limit=20".format('tie up', TenorToken))
+    data = response.json()
+    output = random.choice(data["results"])
+    gif = output['media'][0]['gif']['url']
+    embed = discord.Embed(title=":flushed:", description=ctx.author.mention + " ties down " + member.mention)
+    embed.set_image(url=gif)
+    await ctx.reply(embed=embed)
+    print(str(ctx.author) + " tied down " + str(member))
+
+@bot.command(pass_context=True)
 async def attack(ctx):
     response = requests.get("https://g.tenor.com/v1/search?q={}&key={}&limit=20".format('anime girl gun', TenorToken))
     data = response.json()
@@ -363,36 +464,51 @@ async def attack(ctx):
     await ctx.reply(embed=embed)
     print("I attacked")
 
+@bot.command()
+async def tcommands(ctx):
+    embedVar = discord.Embed(title="Text Commands", description="Command Prefix: ~", color=0xf900ff)
+
+    embedVar.add_field(name="hey", value="receive a random reply", inline=False)
+    embedVar.add_field(name="stats", value="displays server statistics", inline=False)
+    embedVar.add_field(name="meme", value="returns a fresh meme", inline=False)
+    embedVar.add_field(name="dance", value="returns a dancing gif", inline=False)
+    embedVar.add_field(name="kiss", value="@ someone to kiss them", inline=False)
+    embedVar.add_field(name="pat", value="@ someone to pat them", inline=False)
+    embedVar.add_field(name="slap", value="@ someone to slap them", inline=False)
+    embedVar.add_field(name="hug", value="@ someone to hug them", inline=False)
+    embedVar.add_field(name="fuck", value="@ someone to fuck them", inline=False)
+    embedVar.add_field(name="tie", value="@ someone to tie them up", inline=False)
+    embedVar.add_field(name="attack", value="returns an attacking gif", inline=False)
+
+    await ctx.reply(embed=embedVar)
+    print (str(ctx.message.author) + " asked for help")
+
+@bot.command()
+async def vcommands(ctx):
+    embedVar = discord.Embed(title="Voice Commands", description="Command Prefix: ~", color=0xf900ff)
+
+    embedVar.add_field(name="join", value="I join the vc", inline=False)
+    embedVar.add_field(name="play", value="play a song", inline=False)
+    embedVar.add_field(name="pause", value="pause current song", inline=False)
+    embedVar.add_field(name="resume", value="resume current song", inline=False)
+    embedVar.add_field(name="stop", value="Drop queue and stop playing", inline=False)
+    embedVar.add_field(name="queue", value="Show songs in queue", inline=False)
+    embedVar.add_field(name="say", value="Say something text-to-speech", inline=False)
+    embedVar.add_field(name="leave", value="I leave the vc", inline=False)
+
+    await ctx.reply(embed=embedVar)
+    print (str(ctx.message.author) + " asked for help")
+
 @bot.event
 async def on_message(ctx):
     global milkMention
+
     if ctx.author == bot.user:
         return
-
-    if milkMention:
-        if 'fuck you' in ctx.content.lower():
-            await ctx.reply('Fuck me then:flushed:')
-            milkMention = False
-        elif 'shut up' in ctx.content.lower() or 'stfu' in ctx.content.lower():
-            await ctx.reply('How about you shut up, twat')
-            milkMention = False
-        elif 'love' in ctx.content.lower():
-            await ctx.reply('What is love?')
-            milkMention = False
-        elif 'bot' in ctx.content.lower():
-            await ctx.reply('I\'m a real girl, not a bot :pensive:')
-            milkMention = False
-        elif 'istg' in ctx.content.lower():
-            await ctx.reply('I thought you were an atheist')
-            milkMention = False
-        elif 'suck' in ctx.content.lower():
-            await ctx.reply('I do suck :smirk:')
-            milkMention = False
     
     if ('happy' in ctx.content.lower()):
         print("Read happy from " + str(ctx.author))
         await ctx.reply('Imagine being asked :rolling_eyes:')
-
 
     if 'milky' in ctx.content.lower():
         if 'fuck you' in ctx.content.lower():
@@ -417,8 +533,28 @@ async def on_message(ctx):
             await ctx.reply(':flushed:')
             milkMention = True
         print(str(ctx.author) + " mentioned my name")
+    
+    if milkMention:
+        if 'fuck you' in ctx.content.lower():
+            await ctx.reply('Fuck me then:flushed:')
+            milkMention = False
+        elif 'shut up' in ctx.content.lower() or 'stfu' in ctx.content.lower():
+            await ctx.reply('How about you shut up, twat')
+            milkMention = False
+        elif 'love' in ctx.content.lower():
+            await ctx.reply('What is love?')
+            milkMention = False
+        elif 'bot' in ctx.content.lower():
+            await ctx.reply('I\'m a real girl, not a bot :pensive:')
+            milkMention = False
+        elif 'istg' in ctx.content.lower():
+            await ctx.reply('I thought you were an atheist')
+            milkMention = False
+        elif 'suck' in ctx.content.lower():
+            await ctx.reply('I do suck :smirk:')
+            milkMention = False
 
-    if 'dickhead' in ctx.content.lower() or 'nigg' in ctx.content.lower():
+    if 'nigg' in ctx.content.lower():
         await ctx.reply('Bad word baka 🤨')
         await ctx.delete()
         print(str(ctx.author) + " swore")
@@ -428,6 +564,19 @@ async def on_message(ctx):
         await ctx.reply('Choke me like you hate me, but you love me :blush:')
 
     await bot.process_commands(ctx)
+
+@bot.command(pass_context = True)
+async def mute(ctx, member: discord.Member):
+     if ctx.message.author.guild_permissions.administrator:
+        role = discord.utils.get(member.guild.roles, name='Muted')
+        await member.edit(roles=[])
+        await member.add_roles(role)
+        embed=discord.Embed(title="Muted!", description="**{0}** was muted by **{1}**!".format(member, ctx.message.author), color=0xff00f6)
+        print(str(ctx.message.author) + " Muted " + str(member))
+        await ctx.reply(embed=embed)
+     else:
+        embed=discord.Embed(title="Permission Denied.", description="You don't have permission to use this command.", color=0xff00f6)
+        await ctx.reply(embed=embed)
 
 @kiss.error
 async def kiss_error(ctx, error):
@@ -472,6 +621,18 @@ async def on_command_error(ctx, error):
         None
 @levi.error
 async def levi_error(ctx, error):
+    print(str(error))
+
+@mute.error
+async def mute_error(ctx, error):
+    print(str(error))
+
+@say.error
+async def say_error(ctx, error):
+    print(str(error))
+
+@play.error
+async def play_error(ctx, error):
     print(str(error))
 
 bot.run(TOKEN)

@@ -150,6 +150,8 @@ async def leave(ctx):
         await voice.disconnect()
         await ctx.reply('Bbye :wave:')
         print("Milky was disconnected from " + str(ctx.message.author.voice.channel))
+    else:
+        await ctx.reply('Not connected')
 
 @bot.command()
 async def say(ctx):
@@ -176,8 +178,9 @@ async def play(ctx, url):
     YDL_OPTIONS = {'format': 'bestaudio', 'noplaylist': 'True'}
     channel = ctx
     if voice == None: 
-        await ctx.reply("I'm not in vc :(")
-        return
+        voice = await channel.connect()
+        await ctx.reply('I pull up🕶️')
+        print("Milky joined " + str(ctx.channel))
     if not voice == None:
         if not voice.is_playing():
             with YoutubeDL(YDL_OPTIONS) as ydl:
@@ -213,9 +216,13 @@ async def vibe(ctx):
     custom = open(file, "r")
 
     channel = ctx
-    
+
     for line in custom:
         if (line != ""):
+            if voice == None: 
+                voice = await channel.connect()
+                await ctx.reply('I pull up🕶️')
+                print("Milky joined " + str(ctx.channel))
             if not voice.is_playing():
                 with YoutubeDL(YDL_OPTIONS) as ydl:
                     info = ydl.extract_info(str(line), download=False)
@@ -243,13 +250,16 @@ async def remove(ctx, number):
     global queueCount
     position = int(number) - 1
 
-    if position <= queueCount:
-        await ctx.reply(str(queueNames[position]) + "\nAlready played, can't do that")
+    if queueCount == 0:
+        await ctx.reply("No songs in queue :(")
     else:
-        embedVar = discord.Embed(title="Removed :negative_squared_cross_mark:", description=str(queueNames[position]), color=0xf900ff)
-        await ctx.reply(embed=embedVar)
-        del playlist[position]
-        del queueNames[position]
+        if position <= queueCount:
+            await ctx.reply(str(queueNames[position]) + "\nAlready played, can't do that")
+        else:
+            embedVar = discord.Embed(title="Removed :negative_squared_cross_mark:", description=str(queueNames[position]), color=0xf900ff)
+            await ctx.reply(embed=embedVar)
+            del playlist[position]
+            del queueNames[position]
     
 @bot.command()
 async def np(ctx):
@@ -488,10 +498,8 @@ async def vcommands(ctx):
     embedVar = discord.Embed(title="Voice Commands", description="Command Prefix: ~", color=0xf900ff)
 
     embedVar.add_field(name="join", value="I join the vc", inline=False)
-    embedVar.add_field(name="play", value="play a song", inline=False)
-    embedVar.add_field(name="pause", value="pause current song", inline=False)
-    embedVar.add_field(name="resume", value="resume current song", inline=False)
-    embedVar.add_field(name="stop", value="Drop queue and stop playing", inline=False)
+    embedVar.add_field(name="play", value="follow it with a youtube link to play that song", inline=False)
+    embedVar.add_field(name="vibe", value="follow it with (basic, rap, sad or corpse) for a playlist", inline=False)
     embedVar.add_field(name="queue", value="Show songs in queue", inline=False)
     embedVar.add_field(name="say", value="Say something text-to-speech", inline=False)
     embedVar.add_field(name="leave", value="I leave the vc", inline=False)
@@ -578,6 +586,19 @@ async def mute(ctx, member: discord.Member):
         embed=discord.Embed(title="Permission Denied.", description="You don't have permission to use this command.", color=0xff00f6)
         await ctx.reply(embed=embed)
 
+@bot.command(pass_context = True)
+async def unmute(ctx, member: discord.Member):
+     if ctx.message.author.guild_permissions.administrator:
+        role = discord.utils.get(member.guild.roles, name='Common Folk')
+        await member.edit(roles=[])
+        await member.add_roles(role)
+        embed=discord.Embed(title="Unmuted!", description="**{0}** was unmuted by **{1}**!".format(member, ctx.message.author), color=0xff00f6)
+        print(str(ctx.message.author) + " Unmuted " + str(member))
+        await ctx.reply(embed=embed)
+     else:
+        embed=discord.Embed(title="Permission Denied.", description="You don't have permission to use this command.", color=0xff00f6)
+        await ctx.reply(embed=embed)
+
 @kiss.error
 async def kiss_error(ctx, error):
     if str(error) == "member is a required argument that is missing.":
@@ -625,6 +646,10 @@ async def levi_error(ctx, error):
 
 @mute.error
 async def mute_error(ctx, error):
+    print(str(error))
+
+@unmute.error
+async def unmute_error(ctx, error):
     print(str(error))
 
 @say.error

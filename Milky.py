@@ -17,13 +17,18 @@ load_dotenv()
 bot = commands.Bot(command_prefix="~", intents=intents)
 TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD = os.getenv('DISCORD_GUILD')
+TenorToken = 'WQ0SUDCDIAJY'
 playlist = []
 queueNames = []
 queueCount = 0
 paused = False
 skipping = False
-TenorToken = 'WQ0SUDCDIAJY'
 milkMention = False
+silenced = False
+deletedMessages = []
+deletedMessageUsers = []
+deletedCount = 0
+editedMessage = ''
 
 def update():
     threading.Timer(3.0, update).start()
@@ -79,13 +84,80 @@ async def on_member_remove(member):
     print (str(member) + " left the server")
     await channel.send(embed=embed)
 
+@bot.event
+async def on_message_delete(message):
+    global deletedMessages
+    global deletedMessageUsers
+    global deletedCount
+
+    if deletedCount > 5:
+        deletedCount = 0
+
+    deletedMessages.insert(deletedCount, message)
+    deletedMessageUsers.insert(deletedCount, str(message.author))
+    count =+ 1
+
+@bot.event
+async def on_message_edit(message_before, message_after):
+    global editedMessage
+    editedMessage = discord.Embed(title=str(message_before.author) + " edited a message")
+    editedMessage.add_field(name="Before", value=message_before.content, inline=True)
+    editedMessage.add_field(name="After", value=message_after.content, inline=True)
+
 @bot.command()
-async def stats(ctx):
-    embed=discord.Embed(title="Here are the stats:")
-    embed.add_field(name="Users:", value=ctx.guild.member_count, inline=False)
-    embed.add_field(name="Channels:", value=len(ctx.guild.channels), inline=False)
-    print(str(ctx.author) + " asked for stats")
-    await ctx.send(embed=embed)
+async def edited(ctx):
+    global editedMessage
+    await ctx.reply(embed=editedMessage)
+
+@bot.command()
+async def vote(ctx):
+    embed=discord.Embed(title=str(ctx.message.content))
+    title = ctx.message.content.removeprefix('~vote ')
+    print(str(ctx.author) + " inititiated a vote: " + title)
+    embed=discord.Embed(title=title, description= "by " + ctx.author.mention)
+    sent = await ctx.send(embed=embed)
+    await sent.add_reaction('✅')
+    await sent.add_reaction('❌')
+
+@bot.command()
+async def silence(ctx):
+    global silenced
+    if ctx.message.author.guild_permissions.administrator:
+        if not silenced:
+            embed=discord.Embed(title="Silenced chat", description="The chat has been silenced, only admins can talk")
+            silenced = True
+            print(str(ctx.author) + " silenced chat")
+            await ctx.send(embed=embed)
+        else:
+            embed=discord.Embed(title="Chat active", description="The chat has been activated, everyone can talk")
+            silenced = False
+            print(str(ctx.author) + " activated chat")
+            await ctx.send(embed=embed)
+    else:
+        embed=discord.Embed(title="Permission Denied.", description="You don't have permission to use this command.", color=0xff00f6)
+        await ctx.reply(embed=embed)
+
+@bot.command()
+async def expose(ctx, member : discord.Member):
+    global deletedMessages
+    global deletedMessageUsers
+    count = 0
+    found = False
+
+    for ind, user in enumerate(deletedMessageUsers):
+        if (user == str(member)):
+            if count < 5:
+                if not found:
+                    embed=discord.Embed(title="Exposed", description=member.mention)
+                    found = True
+                embed.add_field(name=str(deletedMessages[ind].content), value="-----------------------------", inline=False)
+                count += 1
+    
+    if (not found):
+        await ctx.reply("Nothing to expose")
+    else:
+        await ctx.reply(embed=embed)
+        print(str(ctx.author) + " exposed " + str(member))
 
 @bot.command()
 async def hey(message):
@@ -157,17 +229,19 @@ async def leave(ctx):
 async def say(ctx):
     channel = ctx.message.author.voice.channel
     voice = get(bot.voice_clients, guild=ctx.guild)
-    if voice and voice.is_connected():
-        await voice.move_to(channel)
-        say = ctx.message.content.removeprefix('~say')
-        await ctx.send(str(say), tts=True)
-        voice.stop()
-    else:
-        voice = await channel.connect()
-        say = ctx.message.content.removeprefix('~say')
-        await ctx.send(str(say), tts=True)
-        voice.stop()
-        print("Milky joined " + str(ctx.channel))
+    say = ctx.message.content.removeprefix('~say')
+
+    if not voice.is_playing():
+        if voice and voice.is_connected():
+            await voice.move_to(channel)
+            await ctx.send(str(say), tts=True)
+            voice.stop()
+        else:
+            voice = await channel.connect()
+            await ctx.send(str(say), tts=True)
+            voice.stop()
+            print("Milky joined " + str(ctx.channel))
+    else: await ctx.reply("Can't right now :(")
 
 @bot.command()
 async def play(ctx, url):
@@ -175,10 +249,11 @@ async def play(ctx, url):
     global playlist
     global channel
     global queueNames
+    vc = ctx.message.author.voice.channel
     YDL_OPTIONS = {'format': 'bestaudio', 'noplaylist': 'True'}
     channel = ctx
     if voice == None: 
-        voice = await channel.connect()
+        voice = await vc.connect()
         await ctx.reply('I pull up🕶️')
         print("Milky joined " + str(ctx.channel))
     if not voice == None:
@@ -210,6 +285,7 @@ async def vibe(ctx):
     global queueNames
     global queueCount
     global channel
+    vc = ctx.message.author.voice.channel
     YDL_OPTIONS = {'format': 'bestaudio', 'noplaylist': 'True'}
     voice = get(bot.voice_clients, guild=ctx.guild)
     file = ctx.message.content.removeprefix('~vibe ') + ".txt"
@@ -220,7 +296,7 @@ async def vibe(ctx):
     for line in custom:
         if (line != ""):
             if voice == None: 
-                voice = await channel.connect()
+                voice = await vc.connect()
                 await ctx.reply('I pull up🕶️')
                 print("Milky joined " + str(ctx.channel))
             if not voice.is_playing():
@@ -250,8 +326,10 @@ async def remove(ctx, number):
     global queueCount
     position = int(number) - 1
 
-    if queueCount == 0:
+    if len(queueNames) == 0:
         await ctx.reply("No songs in queue :(")
+    elif position > len(queueNames) - 1:
+        await ctx.reply("No song in that position :(")
     else:
         if position <= queueCount:
             await ctx.reply(str(queueNames[position]) + "\nAlready played, can't do that")
@@ -478,7 +556,7 @@ async def attack(ctx):
 async def tcommands(ctx):
     embedVar = discord.Embed(title="Text Commands", description="Command Prefix: ~", color=0xf900ff)
 
-    embedVar.add_field(name="hey", value="receive a random reply", inline=False)
+    embedVar.add_field(name="hey", value="return a random reply", inline=False)
     embedVar.add_field(name="stats", value="displays server statistics", inline=False)
     embedVar.add_field(name="meme", value="returns a fresh meme", inline=False)
     embedVar.add_field(name="dance", value="returns a dancing gif", inline=False)
@@ -501,7 +579,7 @@ async def vcommands(ctx):
     embedVar.add_field(name="play", value="follow it with a youtube link to play that song", inline=False)
     embedVar.add_field(name="vibe", value="follow it with (basic, rap, sad or corpse) for a playlist", inline=False)
     embedVar.add_field(name="queue", value="Show songs in queue", inline=False)
-    embedVar.add_field(name="say", value="Say something text-to-speech", inline=False)
+    embedVar.add_field(name="say", value="follow it with something to say text-to-speech", inline=False)
     embedVar.add_field(name="leave", value="I leave the vc", inline=False)
 
     await ctx.reply(embed=embedVar)
@@ -510,13 +588,14 @@ async def vcommands(ctx):
 @bot.event
 async def on_message(ctx):
     global milkMention
+    global silenced
 
     if ctx.author == bot.user:
         return
-    
-    if ('happy' in ctx.content.lower()):
-        print("Read happy from " + str(ctx.author))
-        await ctx.reply('Imagine being asked :rolling_eyes:')
+
+    if silenced:
+        if not ctx.author.guild_permissions.administrator:
+            await ctx.delete()
 
     if 'milky' in ctx.content.lower():
         if 'fuck you' in ctx.content.lower():
@@ -567,9 +646,12 @@ async def on_message(ctx):
         await ctx.delete()
         print(str(ctx.author) + " swore")
 
-    if 'choke' in ctx.content.lower():
+    if 'choke' in ctx.content:
         print("Read choke from " + str(ctx.author))
         await ctx.reply('Choke me like you hate me, but you love me :blush:')
+
+    if '💀' in ctx.content.lower():
+        await ctx.channel.send('💀')
 
     await bot.process_commands(ctx)
 
@@ -577,6 +659,7 @@ async def on_message(ctx):
 async def mute(ctx, member: discord.Member):
      if ctx.message.author.guild_permissions.administrator:
         role = discord.utils.get(member.guild.roles, name='Muted')
+
         await member.edit(roles=[])
         await member.add_roles(role)
         embed=discord.Embed(title="Muted!", description="**{0}** was muted by **{1}**!".format(member, ctx.message.author), color=0xff00f6)
@@ -634,15 +717,21 @@ async def pat_error(ctx, error):
     else:
         print(str(error))
 
+@expose.error
+async def expose_error(ctx, error):
+    if str(error) == "member is a required argument that is missing.":
+        await ctx.reply('Tag someone to expose :rolling_eyes:')
+    else:
+        print(str(error))
+
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, discord.ext.commands.errors.CommandNotFound):
         await ctx.reply("I don't know that command")
     if str(error) == "member is a required argument that is missing.":
         None
-@levi.error
-async def levi_error(ctx, error):
-    print(str(error))
+    else:
+        print(str(error))
 
 @mute.error
 async def mute_error(ctx, error):
@@ -658,6 +747,10 @@ async def say_error(ctx, error):
 
 @play.error
 async def play_error(ctx, error):
+    print(str(error))
+
+@edited.error
+async def edited_error(ctx, error):
     print(str(error))
 
 bot.run(TOKEN)

@@ -5,6 +5,7 @@ import aiohttp
 import sys
 import threading
 import requests
+import enchant
 from dotenv import load_dotenv
 from discord.ext import commands
 from discord.utils import get
@@ -18,17 +19,29 @@ bot = commands.Bot(command_prefix="~", intents=intents)
 TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD = os.getenv('DISCORD_GUILD')
 TenorToken = 'WQ0SUDCDIAJY'
+
 playlist = []
 queueNames = []
 queueCount = 0
 paused = False
 skipping = False
+
 milkMention = False
 silenced = False
+
 deletedMessages = []
 deletedMessageUsers = []
 deletedCount = 0
 editedMessage = ''
+
+gameInProgress = False
+scoreNames = []
+scores = []
+questions = ['AFT', 'TAC', 'ITT', 'AFT', 'THA', 'APT', 'DESE', 'UTI', 'ACP', 'ESE', 'TUI', 'IRM', 'GRA', 'TTA', 'SAM', 'TRE', 'AL', 'DI', 
+            'FU', 'CK', 'PLA', 'TER', 'LEG', 'PA', 'RA', 'ME', 'AT', 'EDE', 'MEL', 'EL', 'QUE', 'AN', 'BLE', 'OY', 'TW', 'OUB']
+dictionary = enchant.Dict("en_US")
+currentQuestion = ''
+gameChannel = ''
 
 def update():
     threading.Timer(3.0, update).start()
@@ -95,7 +108,8 @@ async def on_message_delete(message):
 
     deletedMessages.insert(deletedCount, message)
     deletedMessageUsers.insert(deletedCount, str(message.author))
-    count =+ 1
+    deletedCount =+ 1
+    print ("Deleted: " + str(message.content) + " by " + str(message.author))
 
 @bot.event
 async def on_message_edit(message_before, message_after):
@@ -111,7 +125,6 @@ async def edited(ctx):
 
 @bot.command()
 async def vote(ctx):
-    embed=discord.Embed(title=str(ctx.message.content))
     title = ctx.message.content.removeprefix('~vote ')
     print(str(ctx.author) + " inititiated a vote: " + title)
     embed=discord.Embed(title=title, description= "by " + ctx.author.mention)
@@ -119,6 +132,43 @@ async def vote(ctx):
     await sent.add_reaction('✅')
     await sent.add_reaction('❌')
 
+@bot.command()
+async def game(ctx, param):
+    global gameInProgress
+    global scoreNames
+    global scores
+    global questions
+    global currentQuestion
+    global gameChannel
+
+    if gameInProgress:
+        embed=discord.Embed(title="Game already in progress", description= "First finish the game in progress to start another")
+
+    elif param == 'start':
+        scores.clear()
+        gameChannel = ctx.channel
+
+        response = requests.get("https://g.tenor.com/v1/search?q={}&key={}&limit=20".format('anime start', TenorToken))
+        data = response.json()
+        output = random.choice(data["results"])
+        gif = output['media'][0]['gif']['url']
+        embed=discord.Embed(title="Game started", description= "by " + ctx.author.mention)
+        embed.set_image(url=gif)
+
+        question = random.choice(questions)
+        currentQuestion = question
+        gameInProgress = True
+        questionEmbed=discord.Embed(title=question, description= "get a word")
+
+        await ctx.send(embed=embed)
+        await ctx.send(embed=questionEmbed)
+        print(str(ctx.author) + " started a game: ")
+
+    if param == 'score':
+        embed=discord.Embed(title="Scores", description="----------------------------------------------------------", color=0xff00f6)
+        for ind, entry in enumerate(scoreNames):
+            embed.add_field(name=entry, value=str(scores[ind]), inline=True)
+        await ctx.send(embed=embed)
 @bot.command()
 async def silence(ctx):
     global silenced
@@ -452,6 +502,28 @@ async def meme(ctx):
         embed.set_image(url=res['data']['children'][random.randint(0, 25)]['data']['url'])
         await ctx.reply(embed=embed)
         print (str(ctx.author) + " asked for a meme")
+
+@bot.command(pass_context=True)
+async def hentai(ctx):
+  embed = discord.Embed(title="Some hentai :smirk:", description="")
+  async with aiohttp.ClientSession() as cs:
+    async with cs.get(
+        'https://www.reddit.com/r/hentai/new.json?sort=top&t=year') as r:
+        res = await r.json()
+        embed.set_image(url=res['data']['children'][random.randint(0, 25)]['data']['url'])
+        await ctx.reply(embed=embed)
+        print (str(ctx.author) + " asked for hentai")
+
+@bot.command(pass_context=True)
+async def yaoi(ctx):
+  embed = discord.Embed(title="Some yaoi :smirk:", description="")
+  async with aiohttp.ClientSession() as cs:
+    async with cs.get(
+        'https://www.reddit.com/r/yaoi/new.json?sort=top&t=year') as r:
+        res = await r.json()
+        embed.set_image(url=res['data']['children'][random.randint(0, 25)]['data']['url'])
+        await ctx.reply(embed=embed)
+        print (str(ctx.author) + " asked for yaoi")
     
 @bot.command(pass_context=True)
 async def dance(ctx):
@@ -589,9 +661,60 @@ async def vcommands(ctx):
 async def on_message(ctx):
     global milkMention
     global silenced
+    global gameInProgress
+    global scoreNames
+    global scores
+    global questions
+    global dictionary
+    global currentQuestion
+    global gameChannel
 
     if ctx.author == bot.user:
         return
+
+    if gameInProgress:
+        if ctx.channel == gameChannel:
+            if not ('~game start' in ctx.content.lower()):
+                if not ('~game stop' in ctx.content.lower()):
+                    if dictionary.check(ctx.content.lower()):
+                        if currentQuestion.lower() in ctx.content.lower():
+                            await ctx.add_reaction('✅')
+                            question = random.choice(questions)
+                            currentQuestion = question
+                            gameInProgress = True
+                            user = ''
+                            index = -1
+                            for ind, name in enumerate(scoreNames):
+                                if str(ctx.author) == name:
+                                    index = ind
+                            if index == -1:
+                                scoreNames.append(str(ctx.author))
+                                scores.append(1)
+                            else:
+                                scores[index] = scores[index] + 1
+                            questionEmbed=discord.Embed(title=question, description= "Score: " + str(scores[index]), color=0xff00f6)
+                            await ctx.reply(embed=questionEmbed)
+                        else: await ctx.add_reaction('❌')
+                    else: await ctx.add_reaction('❌')
+                else: 
+                    scoreembed=discord.Embed(title="Scores", description="----------------------------------------------------------", color=0xff00f6)
+                    for ind, entry in enumerate(scoreNames):
+                        scoreembed.add_field(name=entry, value=str(scores[ind]), inline=True)
+                    await ctx.reply(embed=scoreembed)     
+
+                    scores.clear()
+                    scoreNames.clear()
+                    gameInProgress = False
+                    currentQuestion = ''   
+                
+                    response = requests.get("https://g.tenor.com/v1/search?q={}&key={}&limit=20".format('anime stop', TenorToken))
+                    data = response.json()
+                    output = random.choice(data["results"])
+                    gif = output['media'][0]['gif']['url']
+                    embed=discord.Embed(title="Game stopped", description= "by " + ctx.author.mention, color=0xff00f6)
+                    embed.set_image(url=gif)
+                    await ctx.reply(embed=embed)
+            else: await ctx.reply("Can't, game in progress")
 
     if silenced:
         if not ctx.author.guild_permissions.administrator:

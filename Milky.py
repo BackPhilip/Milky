@@ -18,7 +18,7 @@ load_dotenv()
 bot = commands.Bot(command_prefix="~", intents=intents)
 TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD = os.getenv('DISCORD_GUILD')
-TenorToken = 'WQ0SUDCDIAJY'
+TenorToken = os.getenv('TENOR')
 
 playlist = []
 queueNames = []
@@ -37,8 +37,10 @@ editedMessage = ''
 gameInProgress = False
 scoreNames = []
 scores = []
-questions = ['AFT', 'TAC', 'ITT', 'AFT', 'THA', 'APT', 'DESE', 'UTI', 'ACP', 'ESE', 'TUI', 'IRM', 'GRA', 'TTA', 'SAM', 'TRE', 'AL', 'DI', 
-            'FU', 'CK', 'PLA', 'TER', 'LEG', 'PA', 'RA', 'ME', 'AT', 'EDE', 'MEL', 'EL', 'QUE', 'AN', 'BLE', 'OY', 'TW', 'OUB']
+questions = ['AFT', 'TAC', 'ITT', 'AFT', 'THA', 'APT', 'DESE', 'UTI', 'ESE', 'TUI', 'IRM', 'GRA', 'TTA', 'SAM', 'TRE', 'AL', 'DI', 
+            'FU', 'CK', 'PLA', 'TER', 'LEG', 'PA', 'RA', 'ME', 'AT', 'EDE', 'MEL', 'EL', 'QUE', 'AN', 'BLE', 'OY', 'TW', 'OUB', 'NEL', 'NO', 'TOR', 
+            'LA', 'PH']
+botrps = ['🪨', '🧻', '✂️']
 dictionary = enchant.Dict("en_US")
 currentQuestion = ''
 gameChannel = ''
@@ -119,6 +121,50 @@ async def on_message_edit(message_before, message_after):
     editedMessage.add_field(name="After", value=message_after.content, inline=True)
 
 @bot.command()
+async def stats(ctx):
+    with open('messageCount.txt', 'r+', encoding='utf-8') as file:
+            messageCount = file.readlines() 
+            embed=discord.Embed(title=f"Server statistics for {ctx.guild.name}", color=0xff00f6)
+            embed.add_field(name="Users:", value=ctx.guild.member_count, inline=False)
+            embed.add_field(name="Channels:", value=len(ctx.guild.channels), inline=False)
+            embed.add_field(name="Messages Sent:", value=messageCount[0] + " from 1/1/2022", inline=False)
+            await ctx.reply(embed=embed)
+
+@bot.command()
+async def balance(ctx, member : discord.Member):
+    names = []
+    counts = []   
+    myCount = ''   
+    with open('milkNames.txt', 'r') as file:
+        names = file.readlines()
+    with open('milkCounts.txt', 'r') as file:
+        counts = file.readlines()                                                         
+    lineIndex = -1
+    for name in names:
+        if str(name).strip() == str(member):
+            lineIndex = names.index(name)
+    if not lineIndex == -1:
+        for i, line in enumerate(counts):
+            if i == lineIndex:                                            
+                myCount = line.strip()
+                embed = discord.Embed(title=myCount + " milk :milk:", color=0xff00f6)
+                await ctx.reply(embed=embed)
+    else:
+        embed = discord.Embed(title="You have no milk")
+        await ctx.reply(embed=embed)
+
+@bot.command()
+async def transfer(ctx, count, member : discord.Member):
+    if(takeMilk(str(ctx.author), int(count))):
+        giveMilk(str(member), int(count))
+        embed = discord.Embed(title=count + " milk given to " + str(member), color=0xff00f6)
+        await ctx.reply(embed=embed)
+        print(str(ctx.author) + " gave " + count + " milk to " + str(member))
+    else:
+        embed = discord.Embed(title="You don't have enough milk", color=0xff00f6)
+        await ctx.reply(embed=embed)
+
+@bot.command()
 async def edited(ctx):
     global editedMessage
     await ctx.reply(embed=editedMessage)
@@ -127,7 +173,7 @@ async def edited(ctx):
 async def vote(ctx):
     title = ctx.message.content.removeprefix('~vote ')
     print(str(ctx.author) + " inititiated a vote: " + title)
-    embed=discord.Embed(title=title, description= "by " + ctx.author.mention)
+    embed=discord.Embed(title=title, description= "by " + ctx.author.mention, color=0xff00f6)
     sent = await ctx.send(embed=embed)
     await sent.add_reaction('✅')
     await sent.add_reaction('❌')
@@ -169,6 +215,58 @@ async def game(ctx, param):
         for ind, entry in enumerate(scoreNames):
             embed.add_field(name=entry, value=str(scores[ind]), inline=True)
         await ctx.send(embed=embed)
+
+@bot.command()
+async def rps(ctx, move, wager):
+    global botrps
+    botChoice = random.choice(botrps)
+    embed=discord.Embed(title="none", description="none", color=0xff00f6)
+    won = False
+    lost = False
+
+    if int(milkCount(str(ctx.author))) >= int(wager):
+        if move == 'rock' or move == 'r':
+            if botChoice == '🪨':
+                embed=discord.Embed(title="🪨 vs 🪨", description="Tie", color=0xff00f6)
+            elif botChoice == '🧻':
+                embed=discord.Embed(title="🪨 vs 🧻", description="You lose " + wager + " milk", color=0xff00f6)
+                lost = True
+            elif botChoice == '✂️':
+                embed=discord.Embed(title="🪨 vs ✂️", description="You win " + wager + " milk", color=0xff00f6)
+                won = True
+        elif move == 'paper' or move == 'p':
+            if botChoice == '🪨':
+                embed=discord.Embed(title="🧻 vs 🪨", description="You win " + wager + " milk", color=0xff00f6)
+                won = True
+            elif botChoice == '🧻':
+                embed=discord.Embed(title="🧻 vs 🧻", description="Tie", color=0xff00f6)
+            elif botChoice == '✂️':
+                embed=discord.Embed(title="🧻 vs ✂️", description="You lose " + wager + " milk", color=0xff00f6)
+                lost = True
+        elif move == 'scissors' or move == 's':
+                if botChoice == '🪨':
+                    embed=discord.Embed(title="✂️ vs 🪨", description="You lose " + wager + " milk", color=0xff00f6)
+                    lost = True
+                elif botChoice == '🧻':
+                    embed=discord.Embed(title="✂️ vs 🧻", description="You win " + wager + " milk", color=0xff00f6)
+                    won = True
+                elif botChoice == '✂️':
+                    embed=discord.Embed(title="✂️ vs ✂️", description="Tie", color=0xff00f6)
+        else:
+                embed=discord.Embed(title="Incorrect input", description="rock, paper, scissors", color=0xff00f6)
+            
+        await ctx.reply(embed=embed)
+        if won:
+            giveMilk(str(ctx.author), int(wager))
+            print(str(ctx.author) + " won " + wager + " milk")
+        elif lost:
+            takeMilk(str(ctx.author), int(wager))
+            print(str(ctx.author) + " lost " + wager + " milk")
+    else:
+        embed = discord.Embed(title="You don't have enough milk", color=0xff00f6)
+        await ctx.reply(embed=embed)
+
+
 @bot.command()
 async def silence(ctx):
     global silenced
@@ -494,46 +592,65 @@ async def clear(ctx, amount=100000):
 
 @bot.command(pass_context=True)
 async def meme(ctx):
-  embed = discord.Embed(title="Some memes :smirk:", description="")
+  embed = discord.Embed(title="Some memes :smirk:, 10 milk deducted", description="")
   async with aiohttp.ClientSession() as cs:
     async with cs.get(
         'https://www.reddit.com/r/memes/new.json?sort=hot') as r:
         res = await r.json()
         embed.set_image(url=res['data']['children'][random.randint(0, 25)]['data']['url'])
         await ctx.reply(embed=embed)
+        takeMilk(str(ctx.author), 10)
         print (str(ctx.author) + " asked for a meme")
 
 @bot.command(pass_context=True)
 async def hentai(ctx):
-  embed = discord.Embed(title="Some hentai :smirk:", description="")
-  async with aiohttp.ClientSession() as cs:
-    async with cs.get(
-        'https://www.reddit.com/r/hentai/new.json?sort=top&t=year') as r:
-        res = await r.json()
-        embed.set_image(url=res['data']['children'][random.randint(0, 25)]['data']['url'])
+    if (ctx.channel.is_nsfw()):
+        if int(milkCount(str(ctx.author))) >= 100:
+            embed = discord.Embed(title="Some hentai:smirk:, 100 milk deducted", description="")
+            async with aiohttp.ClientSession() as cs:
+                async with cs.get(
+                    'https://www.reddit.com/r/hentai/new.json?sort=top&t=year') as r:
+                    res = await r.json()
+                    embed.set_image(url=res['data']['children'][random.randint(0, 25)]['data']['url'])
+                    await send_dm(ctx=ctx, member=ctx.author, content=embed)
+                    takeMilk(str(ctx.author), 100)
+                    print (str(ctx.author) + " asked for hentai")
+        else:
+            embed = discord.Embed(title="Not enough milk", description="")
+            await ctx.reply(embed=embed)
+    else:
+        embed = discord.Embed(title="Not NSFW :rotating_light:", description="Mf go to NSFW")
         await ctx.reply(embed=embed)
-        print (str(ctx.author) + " asked for hentai")
 
 @bot.command(pass_context=True)
 async def yaoi(ctx):
-  embed = discord.Embed(title="Some yaoi :smirk:", description="")
-  async with aiohttp.ClientSession() as cs:
-    async with cs.get(
-        'https://www.reddit.com/r/yaoi/new.json?sort=top&t=year') as r:
-        res = await r.json()
-        embed.set_image(url=res['data']['children'][random.randint(0, 25)]['data']['url'])
+    if (ctx.channel.is_nsfw()):
+        if int(milkCount(str(ctx.author))) >= 100:
+            embed = discord.Embed(title="Some yaoi :smirk, 100 milk deducted:", description="")
+            async with aiohttp.ClientSession() as cs:
+                async with cs.get(
+                    'https://www.reddit.com/r/yaoi/new.json?sort=top&t=year') as r:
+                    res = await r.json()
+                    embed.set_image(url=res['data']['children'][random.randint(0, 25)]['data']['url'])
+                    await send_dm(ctx=ctx, member=ctx.author, content=embed)
+                    takeMilk(str(ctx.author), 100)
+                    print (str(ctx.author) + " asked for yaoi")
+        else:
+            embed = discord.Embed(title="Not enough milk", description="")
+            await ctx.reply(embed=embed)
+    else:
+        embed = discord.Embed(title="Not NSFW :rotating_light:", description="Mf go to NSFW")
         await ctx.reply(embed=embed)
-        print (str(ctx.author) + " asked for yaoi")
-    
+
 @bot.command(pass_context=True)
-async def dance(ctx):
-    response = requests.get("https://g.tenor.com/v1/search?q={}&key={}&limit=20".format('anime dance', TenorToken))
+async def tenor(ctx, search):
+    response = requests.get("https://g.tenor.com/v1/search?q={}&key={}&limit=20".format(str(search), TenorToken))
     data = response.json()
     output = random.choice(data["results"])
     gif = output['media'][0]['gif']['url']
-    embed = discord.Embed(title="Rythm of the night", description="")
+    embed = discord.Embed(title="Tenor", description="")
     embed.set_image(url=gif)
-    print (str(ctx.author) + " danced")
+    print (str(ctx.author) + " searched for " + str(search))
     await ctx.reply(embed=embed)
 
 @bot.command(pass_context=True)
@@ -579,17 +696,6 @@ async def hug(ctx, member : discord.Member):
     embed.set_image(url=gif)
     await ctx.reply(embed=embed)
     print (str(ctx.author) + " hugged " + str(member))
-
-@bot.command(pass_context=True)
-async def levi(ctx):
-    response = requests.get("https://g.tenor.com/v1/search?q={}&key={}&limit=20".format('levi ackerman', TenorToken))
-    data = response.json()
-    output = random.choice(data["results"])
-    gif = output['media'][0]['gif']['url']
-    embed = discord.Embed(title="Levi Ackerman", description="Give up on your dreams and die")
-    embed.set_image(url=gif)
-    await ctx.reply(embed=embed)
-    print ("Levi was summoned")
 
 @bot.command(pass_context=True)
 async def fuck(ctx, member : discord.Member):
@@ -672,6 +778,13 @@ async def on_message(ctx):
     if ctx.author == bot.user:
         return
 
+    if ctx.guild.id == 893943537698213949:
+        with open('messageCount.txt', 'r+', encoding='utf-8') as file:
+            messageCount = file.readlines() 
+            messageCount[0] = str(int(messageCount[0]) + 1)
+            with open('messageCount.txt', 'w') as file:
+                        file.writelines(messageCount) 
+
     if gameInProgress:
         if ctx.channel == gameChannel:
             if not ('~game start' in ctx.content.lower()):
@@ -692,8 +805,24 @@ async def on_message(ctx):
                                 scores.append(1)
                             else:
                                 scores[index] = scores[index] + 1
-                            questionEmbed=discord.Embed(title=question, description= "Score: " + str(scores[index]), color=0xff00f6)
-                            await ctx.reply(embed=questionEmbed)
+                            if scores[index] == 10:
+                                giveMilk(str(ctx.author), 100)
+
+                                scoreembed=discord.Embed(title="Scores", description="----------------------------------------------------------", color=0xff00f6)
+                                for ind, entry in enumerate(scoreNames):
+                                    scoreembed.add_field(name=entry, value=str(scores[ind]), inline=True)
+                                await ctx.reply(embed=scoreembed)
+                                wonembed=discord.Embed(title=str(ctx.author) + " Won", description="Congratulations, here is 100 milk 🥛", color=0xff00f6)
+                                await ctx.reply(embed=wonembed)
+
+                                scores.clear()
+                                scoreNames.clear()
+                                gameInProgress = False
+                                currentQuestion = ''
+                                print(str(ctx.author) + ' won 100 milk')
+                            else:
+                                questionEmbed=discord.Embed(title=question, description= "Score: " + str(scores[index]), color=0xff00f6)
+                                await ctx.reply(embed=questionEmbed)
                         else: await ctx.add_reaction('❌')
                     else: await ctx.add_reaction('❌')
                 else: 
@@ -805,6 +934,101 @@ async def unmute(ctx, member: discord.Member):
         embed=discord.Embed(title="Permission Denied.", description="You don't have permission to use this command.", color=0xff00f6)
         await ctx.reply(embed=embed)
 
+@bot.command(pass_context = True)
+async def hierarchy(ctx):
+    names = []
+    counts = []  
+    highest = 0    
+    with open('milkNames.txt', 'r+', encoding='utf-8') as file:
+        names = file.readlines()
+    with open('milkCounts.txt', 'r+', encoding='utf-8') as file:
+        counts = file.readlines()
+    
+    counts = sorted(int(counts))
+    embedVar = discord.Embed(title="Text Commands", description="Command Prefix: ~", color=0xf900ff)
+    for i, count in enumerate(counts):
+        
+        file.writelines(counts)
+        embedVar.add_field(name="hey", value="return a random reply", inline=False)
+    
+
+def giveMilk(receiver, amount):
+    names = []
+    counts = []      
+    with open('milkNames.txt', 'r+', encoding='utf-8') as file:
+        names = file.readlines()
+    with open('milkCounts.txt', 'r+', encoding='utf-8') as file:
+        counts = file.readlines()                                                         
+    lineIndex = -1
+    for name in names:
+        if str(name).strip() == receiver:
+            lineIndex = names.index(name)
+    if not lineIndex == -1:
+        for i, line in enumerate(counts):
+            if i == lineIndex:                                            
+                if line.strip() == '':                                           
+                    counts[lineIndex] = str(int(counts[lineIndex]) + amount)
+                else:
+                    counts[lineIndex] = str(int(counts[lineIndex]) + amount) + '\n'
+                with open('milkCounts.txt', 'w') as file:
+                    file.writelines(counts)
+    else:
+        nameFile = open('milkNames.txt', 'a', encoding='utf-8')
+        countFile = open('milkCounts.txt', 'a', encoding='utf-8')
+        nameFile.write('\n' + receiver)
+        countFile.write('\n' + str(amount))
+
+def takeMilk(receiver, amount):
+    available = False
+    if int(amount) > int(milkCount(str(receiver))):
+        available = False
+    else:
+        available = True
+        names = []
+        counts = []      
+        with open('milkNames.txt', 'r+', encoding='utf-8') as file:
+            names = file.readlines()
+        with open('milkCounts.txt', 'r+', encoding='utf-8') as file:
+            counts = file.readlines()                                                         
+        lineIndex = -1
+        for name in names:
+            if str(name).strip() == receiver:
+                lineIndex = names.index(name)
+        if not lineIndex == -1:
+            for i, line in enumerate(counts):
+                if i == lineIndex: 
+                    if line.strip() == '':                                           
+                        counts[lineIndex] = str(int(counts[lineIndex]) - amount)
+                    else:
+                        counts[lineIndex] = str(int(counts[lineIndex]) - amount) + '\n'
+                    with open('milkCounts.txt', 'w') as file:
+                        file.writelines(counts)
+        else:
+            nameFile = open('milkNames.txt', 'a')
+            countFile = open('milkCounts.txt', 'a')
+            nameFile.write('\n' + receiver)
+            countFile.write('\n' + str(-amount))
+    return available
+
+async def send_dm(ctx, member: discord.Member, *, content):
+    channel = await member.create_dm()
+    await channel.send(embed=content)
+
+def milkCount(user):
+    names = []
+    counts = []   
+    number = 0   
+    with open('milkNames.txt', 'r+', encoding='utf-8') as file:
+        names = file.readlines()
+    with open('milkCounts.txt', 'r+', encoding='utf-8') as file:
+        counts = file.readlines()   
+    index = -1                                                      
+    for name in names:
+        if str(name).strip() == user:
+            index = names.index(name) 
+            number = counts[index]
+    return number
+
 @kiss.error
 async def kiss_error(ctx, error):
     if str(error) == "member is a required argument that is missing.":
@@ -876,4 +1100,11 @@ async def play_error(ctx, error):
 async def edited_error(ctx, error):
     print(str(error))
 
+@hentai.error
+async def hentai_error(ctx, error):
+    print(str(error))
+
+@rps.error
+async def rps_error(error):
+    print(str(error))
 bot.run(TOKEN)
